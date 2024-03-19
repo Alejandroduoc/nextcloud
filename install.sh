@@ -57,7 +57,7 @@ mount /mnt/files
 #Download Nextcloud
 cd /var/www/html
 wget https://download.nextcloud.com/server/releases/nextcloud-28.0.3.zip
-unzip nextcloud-28.0.3.zip
+unzip  nextcloud-28.0.3.zip
 chown -R root:root nextcloud
 cd nextcloud
 
