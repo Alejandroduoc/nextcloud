@@ -2,75 +2,62 @@
 
 export DEBIAN_FRONTEND=noninteractive
 
-# defaults 
+# Valores por defecto 
 HOSTNAME="localhost"
 USERNAME="admin"
 PASSWORD="pavo842"
 DBPASSWORD="pavo842"
 EMAIL="test@example.com"
-STORAGEACCOUNT=""
-CONTAINER=""
 
-for i in "$@"
-do
-	case $i in
-		--hostname=*)
-		HOSTNAME="${i#*=}" 
-		;;
-		--username=*)
-		USERNAME="${i#*=}"
-		;;
-		--password=*)
-		PASSWORD="${i#*=}"
-		;;
-		--email=*)
-		EMAIL="${i#*=}"
-		;;
-		--storageaccount=*)
-		STORAGEACCOUNT="${i#*=}"
-		;;	
-		--container=*)
-		CONTAINER="${i#*=}"
-		;;			
-		*)
-		;;
-	esac
+for i in "$@"; do
+    case $i in
+        --hostname=*)
+        HOSTNAME="${i#*=}" 
+        ;;
+        --username=*)
+        USERNAME="${i#*=}"
+        ;;
+        --password=*)
+        PASSWORD="${i#*=}"
+        ;;
+        --email=*)
+        EMAIL="${i#*=}"
+        ;;
+        *)
+        ;;
+    esac
 done
 
-
-#Install Dependencies
-
+# Instalación de dependencias
 apt-get update
 apt-get upgrade -y
-apt-get install -y  php8.1 php8.1-cli php8.1-common php8.1-imap php8.1-redis php8.1-snmp php8.1-xml php8.1-zip php8.1-mbstring php8.1-curl php8.1-gd php8.1-mysql apache2 mariadb-server certbot nfs-common python3-certbot-apache unzip
+apt-get install -y php8.1 php8.1-cli php8.1-common php8.1-imap php8.1-redis php8.1-snmp php8.1-xml php8.1-zip php8.1-mbstring php8.1-curl php8.1-gd php8.1-mysql apache2 mariadb-server certbot unzip
 
-#Create the database and user
-
+# Creación de la base de datos y usuario
 mysql -e "CREATE DATABASE nextcloud;GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'localhost' IDENTIFIED BY '$DBPASSWORD';FLUSH PRIVILEGES;"
 
-#Mount the file storage
-mkdir -p /mnt/files
-echo "$STORAGEACCOUNT.privatelink.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER  /mnt/files    nfs defaults,sec=sys,vers=3,nolock,proto=tcp,nofail    0 0" >> /etc/fstab 
-mount /mnt/files
+# Montaje del almacenamiento de archivos
+mkdir -p /disco
+echo "/dev/sdb1  /disco    ext4    defaults    0 0" >> /etc/fstab
+mount /disco
 
-
-#Download Nextcloud
+# Descarga de Nextcloud
 cd /var/www/html
-wget https://download.nextcloud.com/server/releases/nextcloud-28.0.4.zip
-unzip  nextcloud-28.0.4.zip
+wget https://download.nextcloud.com/server/releases/nextcloud-28.0.3.zip
+unzip nextcloud-28.0.3.zip
 chown -R root:root nextcloud
 cd nextcloud
 
-#Install Nextcloud
-php occ  maintenance:install --database "mysql" --database-name "nextcloud"  --database-user "nextcloud" --database-pass "$DBPASSWORD" --admin-user "$USERNAME" --admin-pass "$PASSWORD" --data-dir /mnt/files
+# Instalación de Nextcloud
+php occ maintenance:install --database "mysql" --database-name "nextcloud" --database-user "nextcloud" --database-pass "$DBPASSWORD" --admin-user "$USERNAME" --admin-pass "$PASSWORD" --data-dir /disco
 sed -i "s/0 => 'localhost',/0 => '$HOSTNAME',/g" ./config/config.php
 sed -i "s/  'overwrite.cli.url' => 'https:\/\/localhost',/  'overwrite.cli.url' => 'http:\/\/$HOSTNAME',/g" ./config/config.php
 
 cd ..
 chown -R www-data:www-data nextcloud
-chown -R www-data:www-data /mnt/files
+chown -R www-data:www-data /disco
 
-#Configure Apache
+# Configuración de Apache
 tee -a /etc/apache2/sites-available/nextcloud.conf << EOF
 <VirtualHost *:80>
 ServerName $HOSTNAME
@@ -93,6 +80,6 @@ EOF
 a2ensite nextcloud.conf
 a2enmod rewrite
 
-#Obtain a Certificate from Let's Encrypt
+# Obtención de un certificado de Let's Encrypt
 certbot run -d $HOSTNAME --agree-tos --apache -m $EMAIL -n
 systemctl restart apache2
